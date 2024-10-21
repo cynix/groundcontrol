@@ -9,7 +9,6 @@
     missing_docs,
     unreachable_pub,
     missing_copy_implementations,
-    unused_qualifications,
     clippy::unwrap_in_result,
     clippy::unwrap_used
 )]

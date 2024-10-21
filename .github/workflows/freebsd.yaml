@@ -1,0 +1,63 @@
+name: FreeBSD
+
+on:
+  push:
+    branches:
+      - freebsd
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+        include:
+          - arch: x86_64
+            dockcross: x64
+            cargo: ''
+          - arch: aarch64
+            dockcross: arm64
+            cargo: -Zbuild-std
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          docker run ghcr.io/cynix/dockcross-freebsd-${{ matrix.dockcross }}:latest > dockcross
+          chmod +x dockcross
+          ./dockcross cargo build ${{ matrix.cargo }} --release
+          cp LICENSE* target/${{ matrix.arch }}-unknown-freebsd/release/
+          tar -C target/${{ matrix.arch }}-unknown-freebsd/release/ -zcf target/groundcontrol-${{ matrix.arch }}-unknown-freebsd.tar.gz --numeric-owner --owner=0 --group=0 groundcontrol LICENSE*
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.arch }}
+          path: target/*.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./target/
+          merge-multiple: true
+
+      - name: Create release
+        run: |
+          gh release delete --cleanup-tag --yes edge || true
+          gh release create --latest=true --notes=${{ github.sha }} --title=edge edge ./target/*.tar.gz
+        env:
+          GH_TOKEN: ${{ github.token }}
